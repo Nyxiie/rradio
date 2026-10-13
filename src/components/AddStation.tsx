@@ -55,7 +55,18 @@ export default function AddStation({ editing, onClose }: { editing: Station | nu
       return
     }
     // For HLS the playlist URL itself is the stream.
-    const list = parsed.hls ? [{ url: url.trim(), title: undefined }] : parsed.entries
+    const hlsUrl = parsed.hls ? validUrl(url) : null
+    if (parsed.hls && !hlsUrl) {
+      setError('Enter the full http(s) URL of this HLS playlist; it is the stream itself.')
+      return
+    }
+    let list = hlsUrl ? [{ url: hlsUrl, title: undefined }] : parsed.entries
+    // Plain http entries cannot play on an https page (mixed content).
+    if (location.protocol === 'https:') list = list.filter((e) => e.url.startsWith('https:'))
+    if (!list.length) {
+      setError('Every stream in that playlist uses plain http, which browsers block on https pages.')
+      return
+    }
     setEntries(list)
     setChosen(0)
     setError(null)
@@ -169,7 +180,7 @@ export default function AddStation({ editing, onClose }: { editing: Station | nu
             <legend className="mb-1 text-xs font-bold uppercase tracking-wider">Pick a stream</legend>
             <div className="max-h-40 space-y-1 overflow-y-auto border-2 border-line p-2">
               {entries.map((e, i) => (
-                <label key={e.url} className="flex cursor-pointer items-start gap-2 text-xs">
+                <label key={`${i}-${e.url}`} className="flex cursor-pointer items-start gap-2 text-xs">
                   <input type="radio" name="entry" checked={chosen === i} onChange={() => setChosen(i)} className="mt-0.5" />
                   <span className="min-w-0 break-all">{e.title ? `${e.title} (${hostOf(e.url)})` : e.url}</span>
                 </label>

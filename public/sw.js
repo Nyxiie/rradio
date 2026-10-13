@@ -1,6 +1,6 @@
 // Minimal service worker: caches the app shell so the UI opens offline.
 // Audio streams and APIs are cross-origin and are never touched here.
-const CACHE = 'rradio-shell-v1'
+const CACHE = 'rradio-shell-v2'
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icon.svg'])))
@@ -24,10 +24,15 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     fetch(req)
       .then((res) => {
-        const copy = res.clone()
-        caches.open(CACHE).then((c) => c.put(req, copy))
+        // Only cache complete, successful same-origin responses (no 404/500 pages, no partial content).
+        if (res.ok && res.status === 200 && res.type === 'basic') {
+          const copy = res.clone()
+          e.waitUntil(caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {}))
+        }
         return res
       })
-      .catch(() => caches.match(req).then((r) => r || caches.match('/'))),
+      .catch(() =>
+        caches.match(req).then((r) => r || (req.mode === 'navigate' ? caches.match('/') : Response.error())),
+      ),
   )
 })

@@ -30,7 +30,14 @@ export default function PlayerBar() {
     <div className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-line bg-surface pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
         <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden border-2 border-line bg-bg text-lg">
-          {np?.artUrl ? <img src={np.artUrl} alt="" className="size-full object-cover" /> : <span aria-hidden="true">♪</span>}
+          {np?.artUrl ? <img
+              key={np.artUrl}
+              src={np.artUrl}
+              alt=""
+              referrerPolicy="no-referrer"
+              onError={(e) => (e.currentTarget.style.display = 'none')}
+              className="size-full object-cover"
+            /> : <span aria-hidden="true">♪</span>}
         </div>
 
         <div className="min-w-0 flex-1" aria-live="polite">

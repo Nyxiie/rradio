@@ -39,13 +39,39 @@ const defaults: Settings = {
   pomodoro: { focus: 25, short: 5, long: 15, rounds: 4, breakMusic: 'lower', chime: true },
 }
 
+// Saved values are checked against the defaults' types so corrupt storage cannot break start-up.
+const pick = <T,>(value: unknown, fallback: T, ok: (v: unknown) => boolean = (v) => typeof v === typeof fallback): T =>
+  ok(value) ? (value as T) : fallback
+const unit = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1
+const intIn = (lo: number, hi: number) => (v: unknown) => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi
+
 function load(): Settings {
-  const saved = loadJson<Partial<Settings>>(KEY) ?? {}
+  const raw = loadJson<unknown>(KEY)
+  const saved = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const vol = (saved.ambientVolume && typeof saved.ambientVolume === 'object' ? saved.ambientVolume : {}) as Record<string, unknown>
+  const pom = (saved.pomodoro && typeof saved.pomodoro === 'object' ? saved.pomodoro : {}) as Record<string, unknown>
+  const d = defaults
   return {
-    ...defaults,
-    ...saved,
-    ambientVolume: { ...defaults.ambientVolume, ...(saved.ambientVolume ?? {}) },
-    pomodoro: { ...defaults.pomodoro, ...(saved.pomodoro ?? {}) },
+    theme: pick(saved.theme, d.theme, (v) => v === 'system' || v === 'light' || v === 'dark'),
+    dataSaver: pick(saved.dataSaver, d.dataSaver),
+    volume: pick(saved.volume, d.volume, unit),
+    muted: pick(saved.muted, d.muted),
+    stationId: pick(saved.stationId, d.stationId, (v) => typeof v === 'string'),
+    favourites: Array.isArray(saved.favourites)
+      ? saved.favourites.filter((f): f is string => typeof f === 'string')
+      : d.favourites,
+    ambientMaster: pick(saved.ambientMaster, d.ambientMaster, unit),
+    ambientVolume: Object.fromEntries(
+      AMBIENT_LAYERS.map((l) => [l.id, pick(vol[l.id], d.ambientVolume[l.id], unit)]),
+    ) as Record<AmbientId, number>,
+    pomodoro: {
+      focus: pick(pom.focus, d.pomodoro.focus, intIn(1, 180)),
+      short: pick(pom.short, d.pomodoro.short, intIn(1, 180)),
+      long: pick(pom.long, d.pomodoro.long, intIn(1, 180)),
+      rounds: pick(pom.rounds, d.pomodoro.rounds, intIn(1, 12)),
+      breakMusic: pick(pom.breakMusic, d.pomodoro.breakMusic, (v) => v === 'keep' || v === 'lower' || v === 'pause'),
+      chime: pick(pom.chime, d.pomodoro.chime),
+    },
   }
 }
 

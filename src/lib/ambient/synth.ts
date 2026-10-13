@@ -158,14 +158,17 @@ class Builder {
 
   /** Runs `fn` at random intervals between min and max seconds until stopped. */
   every(minS: number, maxS: number, fn: () => void): void {
-    const tick = () => {
-      if (this.stopped) return
-      fn()
-      const t = setTimeout(tick, (minS + Math.random() * (maxS - minS)) * 1000)
+    const schedule = () => {
+      const t = setTimeout(() => {
+        // Forget fired timers so the set does not grow for as long as the layer plays.
+        this.timers.delete(t)
+        if (this.stopped) return
+        fn()
+        schedule()
+      }, (minS + Math.random() * (maxS - minS)) * 1000)
       this.timers.add(t)
     }
-    const t = setTimeout(tick, (minS + Math.random() * (maxS - minS)) * 1000)
-    this.timers.add(t)
+    schedule()
   }
 
   /** Plays a one-shot node chain that cleans itself up. */

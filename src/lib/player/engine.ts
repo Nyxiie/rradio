@@ -1,6 +1,6 @@
 import type { NowPlaying, Station } from '../../types'
 import { backoffDelay } from '../backoff'
-import { allStations, findStation } from '../customStations'
+import { allStations, customStore, findStation } from '../customStations'
 import { connectListenMoe } from '../metadata/listenmoe'
 import { startPolling } from '../metadata/poll'
 import { settingsStore } from '../settings'
@@ -101,6 +101,8 @@ function load(station: Station): void {
     // AbortError happens when a new load interrupts play(); anything else is handled by 'error'.
     if (err instanceof DOMException && err.name === 'NotAllowedError') {
       wantPlaying = false
+      clearTimers()
+      endMetadata()
       playerStore.patch({ status: 'paused', message: 'Press play to start.' })
     }
   })
@@ -117,11 +119,13 @@ function armStallTimer(): void {
 function handleFailure(reason: string): void {
   const station = currentStation()
   if (!wantPlaying || !station) return
-  if (stallTimer) clearTimeout(stallTimer)
+  // A stall and an error can both fire for one drop; keep a single pending retry.
+  clearTimers()
   attempt += 1
   if (attempt === 2 && station.fallbackUrl) useFallback = true
   if (attempt > MAX_ATTEMPTS) {
     wantPlaying = false
+    endMetadata()
     audio.removeAttribute('src')
     audio.load()
     playerStore.patch({ status: 'error', message: `${reason} Check the connection or try another station.` })
@@ -134,7 +138,7 @@ function handleFailure(reason: string): void {
   })
   retryTimer = setTimeout(() => {
     retryTimer = undefined
-    if (wantPlaying) load(station)
+    if (wantPlaying && playerStore.get().stationId === station.id) load(station)
   }, delay)
 }
 
@@ -189,6 +193,7 @@ export function play(): void {
   wantPlaying = true
   attempt = 0
   useFallback = false
+  cancelFade()
   applyVolume()
   startMetadata(station)
   load(station)
@@ -243,23 +248,42 @@ export function setDuck(factor: number): void {
   applyVolume()
 }
 
-/** Fades the music out over `ms`, then pauses and restores the volume. */
+let fadeTimer: ReturnType<typeof setInterval> | undefined
+let fadeResolve: (() => void) | undefined
+
+/** Stops a running fade and restores the volume; called when the user starts playback again. */
+function cancelFade(): void {
+  if (!fadeTimer) return
+  clearInterval(fadeTimer)
+  fadeTimer = undefined
+  fade = 1
+  applyVolume()
+  fadeResolve?.()
+  fadeResolve = undefined
+}
+
+/**
+ * Fades the music out over `ms`, then pauses and restores the volume.
+ * Uses a timer rather than requestAnimationFrame, which does not run in hidden tabs.
+ */
 export function fadeOutAndPause(ms = 6000): Promise<void> {
+  cancelFade()
   return new Promise((resolve) => {
-    const start = performance.now()
-    const stepFade = () => {
-      const t = Math.min(1, (performance.now() - start) / ms)
+    const start = Date.now()
+    fadeResolve = resolve
+    fadeTimer = setInterval(() => {
+      const t = Math.min(1, (Date.now() - start) / ms)
       fade = 1 - t
       applyVolume()
-      if (t < 1) requestAnimationFrame(stepFade)
-      else {
-        pause()
-        fade = 1
-        applyVolume()
-        resolve()
-      }
-    }
-    stepFade()
+      if (t < 1) return
+      clearInterval(fadeTimer)
+      fadeTimer = undefined
+      fadeResolve = undefined
+      pause()
+      fade = 1
+      applyVolume()
+      resolve()
+    }, 100)
   })
 }
 
@@ -277,6 +301,15 @@ settingsStore.subscribe(() => {
       startMetadata(station)
       load(station)
     }
+  }
+})
+
+// A deleted custom station cannot keep playing: stop and clear the selection.
+customStore.subscribe(() => {
+  const { stationId } = playerStore.get()
+  if (stationId && !findStation(stationId)) {
+    pause()
+    playerStore.set({ stationId: null, status: 'idle', message: null, nowPlaying: null })
   }
 })
 applyVolume()

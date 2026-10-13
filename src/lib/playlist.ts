@@ -86,20 +86,62 @@ export class PlaylistFetchError extends Error {
   }
 }
 
+const MAX_PLAYLIST_BYTES = 200_000
+const FETCH_TIMEOUT_MS = 15_000
+
+/** Reads at most `max` bytes, so a URL that is really an endless audio stream cannot exhaust memory. */
+async function readCapped(res: Response, max: number): Promise<string> {
+  if (!res.body) return (await res.text()).slice(0, max)
+  const reader = res.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (total < max) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(value)
+      total += value.byteLength
+    }
+  } finally {
+    void reader.cancel().catch(() => {})
+  }
+  const buf = new Uint8Array(Math.min(total, max))
+  let offset = 0
+  for (const c of chunks) {
+    const part = c.subarray(0, buf.length - offset)
+    buf.set(part, offset)
+    offset += part.length
+    if (offset >= buf.length) break
+  }
+  return new TextDecoder().decode(buf)
+}
+
 /** Fetches a playlist in the browser. No proxy is used, so the host must allow CORS. */
 export async function fetchPlaylist(url: string): Promise<ParsedPlaylist> {
-  let res: Response
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS)
   try {
-    res = await fetch(url, { mode: 'cors', cache: 'no-store' })
-  } catch {
-    throw new PlaylistFetchError(
-      'The browser could not load this playlist. The host most likely blocks cross-origin requests (CORS).',
-      true,
-    )
+    let res: Response
+    try {
+      res = await fetch(url, { mode: 'cors', cache: 'no-store', credentials: 'omit', signal: ctrl.signal })
+    } catch {
+      if (ctrl.signal.aborted) throw new PlaylistFetchError('The playlist host did not answer in time.', false)
+      throw new PlaylistFetchError(
+        'The browser could not load this playlist. The host most likely blocks cross-origin requests (CORS).',
+        true,
+      )
+    }
+    if (!res.ok) throw new PlaylistFetchError(`The host answered ${res.status}.`, false)
+    let text: string
+    try {
+      text = await readCapped(res, MAX_PLAYLIST_BYTES)
+    } catch {
+      throw new PlaylistFetchError('The playlist could not be read.', false)
+    }
+    const parsed = parsePlaylist(text, detectKind(url), url)
+    if (!parsed.entries.length) throw new PlaylistFetchError('No stream entries found in that playlist.', false)
+    return parsed
+  } finally {
+    clearTimeout(timer)
   }
-  if (!res.ok) throw new PlaylistFetchError(`The host answered ${res.status}.`, false)
-  const text = (await res.text()).slice(0, 200_000)
-  const parsed = parsePlaylist(text, detectKind(url), url)
-  if (!parsed.entries.length) throw new PlaylistFetchError('No stream entries found in that playlist.', false)
-  return parsed
 }

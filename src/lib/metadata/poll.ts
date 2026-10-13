@@ -6,12 +6,28 @@ function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined
 }
 
+function num(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined
+}
+
+/** Only https image URLs are used for cover art (no data:, javascript: or mixed content). */
+function httpsUrl(v: unknown): string | undefined {
+  const s = str(v)
+  if (!s) return undefined
+  try {
+    return new URL(s).protocol === 'https:' ? s : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** AzuraCast "now playing" API (used by freeCodeCamp Code Radio and loficafe.net). */
 function parseAzuracast(json: unknown, withArt: boolean): NowPlaying | null {
   const j = json as {
     now_playing?: { song?: { title?: string; artist?: string; album?: string; art?: string }; duration?: number; played_at?: number }
     listeners?: { current?: number }
   }
+  if (!j || typeof j !== 'object') return null
   const song = j.now_playing?.song
   const title = str(song?.title)
   if (!title) return null
@@ -19,10 +35,10 @@ function parseAzuracast(json: unknown, withArt: boolean): NowPlaying | null {
     title,
     artist: str(song?.artist),
     album: str(song?.album),
-    artUrl: withArt ? str(song?.art) : undefined,
-    duration: j.now_playing?.duration,
-    startedAt: j.now_playing?.played_at ? j.now_playing.played_at * 1000 : undefined,
-    listeners: j.listeners?.current,
+    artUrl: withArt ? httpsUrl(song?.art) : undefined,
+    duration: num(j.now_playing?.duration),
+    startedAt: num(j.now_playing?.played_at) ? j.now_playing!.played_at! * 1000 : undefined,
+    listeners: num(j.listeners?.current),
   }
 }
 

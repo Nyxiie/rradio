@@ -134,7 +134,7 @@ No automated tests are configured. `npm run build` runs the TypeScript type-chec
 
 ## Deployment
 
-The build output is a static site in `dist/`, with no server code, so any static host works. The intended host is Vercel. There is no Vercel configuration in the repository yet, and the app has not been deployed.
+The build output is a static site in `dist/`, with no server code, so any static host works. The intended host is Vercel, and `vercel.json` sets the build output, caching and security headers (including a Content-Security-Policy). The app has not been deployed yet. If you change the inline theme script in `index.html`, recompute the script hash in the CSP.
 
 The audio streams belong to their stations and have their own terms of use. Check them before making a public deployment.
 

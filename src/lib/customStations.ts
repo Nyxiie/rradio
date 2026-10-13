@@ -11,13 +11,16 @@ function sanitize(raw: unknown): Station | null {
   const r = raw as Record<string, unknown>
   if (typeof r.name !== 'string' || typeof r.streamUrl !== 'string') return null
   if (!/^https?:\/\//i.test(r.streamUrl)) return null
-  const tags = Array.isArray(r.tags) ? r.tags.filter((t): t is string => typeof t === 'string' && !!t.trim()) : []
+  const tags = Array.isArray(r.tags)
+    ? r.tags.filter((t): t is string => typeof t === 'string' && !!t.trim()).slice(0, 10)
+    : []
   return {
-    id: typeof r.id === 'string' && r.id.startsWith('custom-') ? r.id : newId(),
+    id: typeof r.id === 'string' && /^custom-[\w-]{1,60}$/.test(r.id) ? r.id : newId(),
     name: r.name.trim().slice(0, 80) || 'Untitled station',
     tags: tags.length ? tags.map((t) => t.trim().slice(0, 30)) : ['Custom'],
     streamUrl: r.streamUrl.trim(),
-    fallbackUrl: typeof r.fallbackUrl === 'string' && /^https?:\/\//i.test(r.fallbackUrl) ? r.fallbackUrl : undefined,
+    fallbackUrl:
+      typeof r.fallbackUrl === 'string' && /^https?:\/\//i.test(r.fallbackUrl) ? r.fallbackUrl.trim() : undefined,
     metadata: { kind: 'none' },
     custom: true,
   }
@@ -27,7 +30,8 @@ function newId(): string {
   return `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
-const initial = (loadJson<unknown[]>(KEY) ?? []).map(sanitize).filter((s): s is Station => s !== null)
+const saved = loadJson<unknown>(KEY)
+const initial = (Array.isArray(saved) ? saved : []).map(sanitize).filter((s): s is Station => s !== null)
 export const customStore = createStore<{ stations: Station[] }>({ stations: initial })
 customStore.subscribe(() => saveJson(KEY, customStore.get().stations))
 
@@ -86,6 +90,8 @@ export function exportJson(): string {
   return JSON.stringify(data, null, 2)
 }
 
+const MAX_IMPORT = 500
+
 /** Merges a backup into the current state. Returns how many stations were added. */
 export function importJson(text: string): number {
   let parsed: unknown
@@ -100,6 +106,7 @@ export function importJson(text: string): number {
   }
   const existing = customStore.get().stations
   const known = new Set(existing.map((s) => s.streamUrl))
+  if (file.stations.length > MAX_IMPORT) throw new Error(`That file has more than ${MAX_IMPORT} stations.`)
   const added: Station[] = []
   const idMap = new Map<string, string>()
   for (const raw of file.stations) {
@@ -121,6 +128,7 @@ export function importJson(text: string): number {
   if (added.length) customStore.set((s) => ({ stations: [...s.stations, ...added] }))
   if (Array.isArray(file.favourites)) {
     const favs = file.favourites
+      .slice(0, MAX_IMPORT * 2)
       .filter((f): f is string => typeof f === 'string')
       .map((f) => idMap.get(f) ?? f)
       .filter((f) => allStations().some((s) => s.id === f))

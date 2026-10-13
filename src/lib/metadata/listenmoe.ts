@@ -20,26 +20,34 @@ interface GatewayMessage {
   }
 }
 
+const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v : undefined)
+const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
+const list = <T,>(v: T[] | undefined): T[] => (Array.isArray(v) ? v.filter((x) => x && typeof x === 'object') : [])
+
 function toNowPlaying(d: NonNullable<GatewayMessage['d']>, withArt: boolean): NowPlaying | null {
+  // Validate shapes: the gateway is third-party and anything rendered must be a string.
   const song = d.song
-  if (!song?.title) return null
-  const artist = song.artists?.map((a) => a.nameRomaji || a.name).filter(Boolean).join(', ')
-  const album = song.albums?.[0]
-  const artistImage = song.artists?.find((a) => a.image)?.image
+  const title = text(song?.title)
+  if (!song || !title) return null
+  const artists = list(song.artists)
+  const artist = artists.map((a) => text(a.nameRomaji) || text(a.name)).filter(Boolean).join(', ')
+  const album = list(song.albums)[0]
+  const artistImage = artists.map((a) => text(a.image)).find(Boolean)
   let artUrl: string | undefined
   if (withArt) {
-    if (album?.image) artUrl = COVER_BASE + encodeURIComponent(album.image)
+    const albumImage = text(album?.image)
+    if (albumImage) artUrl = COVER_BASE + encodeURIComponent(albumImage)
     else if (artistImage) artUrl = ARTIST_BASE + encodeURIComponent(artistImage)
   }
-  const started = d.startTime ? Date.parse(d.startTime) : NaN
+  const started = typeof d.startTime === 'string' ? Date.parse(d.startTime) : NaN
   return {
-    title: song.title,
+    title,
     artist: artist || undefined,
-    album: album?.nameRomaji || album?.name,
+    album: text(album?.nameRomaji) || text(album?.name),
     artUrl,
     startedAt: Number.isFinite(started) ? started : undefined,
-    duration: song.duration,
-    listeners: d.listeners,
+    duration: num(song.duration),
+    listeners: num(d.listeners),
   }
 }
 
@@ -86,13 +94,16 @@ export function connectListenMoe(
     }
     ws = socket
     socket.onmessage = (ev) => {
+      // Messages already queued when stop() ran must not start a new heartbeat or update the UI.
+      if (stopped || ws !== socket) return
       let msg: GatewayMessage
       try {
         msg = JSON.parse(String(ev.data)) as GatewayMessage
       } catch {
         return
       }
-      if (msg.op === 0 && msg.d?.heartbeat) {
+      if (!msg || typeof msg !== 'object') return
+      if (msg.op === 0 && typeof msg.d?.heartbeat === 'number' && msg.d.heartbeat > 0) {
         attempt = 0
         clearHeartbeat()
         gotAck = true
@@ -104,7 +115,7 @@ export function connectListenMoe(
           }
           gotAck = false
           if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ op: 9 }))
-        }, msg.d.heartbeat)
+        }, Math.max(5_000, msg.d.heartbeat))
       } else if (msg.op === 10) {
         gotAck = true
       } else if (msg.op === 1 && msg.d) {
@@ -128,7 +139,9 @@ export function connectListenMoe(
     if (retry) clearTimeout(retry)
     if (ws) {
       ws.onclose = null
+      ws.onmessage = null
       ws.close()
+      ws = null
     }
   }
 }

@@ -46,11 +46,17 @@ export default function Settings({ onClose }: { onClose: () => void }) {
     a.href = url
     a.download = 'rradio-stations.json'
     a.click()
-    URL.revokeObjectURL(url)
+    // Revoking straight away can cancel the download in some browsers.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
   }
 
   const onFile = async (file: File | undefined) => {
     if (!file) return
+    if (file.size > 1_000_000) {
+      setMsg('That file is too large to be an rradio export.')
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
     try {
       const added = importJson(await file.text())
       setMsg(`Imported ${added} new station${added === 1 ? '' : 's'}.`)

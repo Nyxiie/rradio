@@ -1,3 +1,4 @@
+import { getAudioContext } from './ambient/context'
 import { playChime } from './chime'
 import { isWanted, pause, play, setDuck } from './player/engine'
 import { settingsStore } from './settings'
@@ -75,6 +76,14 @@ function advance(): void {
 export function startPomodoro(): void {
   const s = pomodoroStore.get()
   if (s.running) return
+  // Create/resume the audio context inside this click so the chime is allowed to play later (Safari/iOS).
+  if (settingsStore.get().pomodoro.chime) {
+    try {
+      getAudioContext()
+    } catch {
+      /* audio unavailable */
+    }
+  }
   pomodoroStore.patch({ running: true, endsAt: Date.now() + s.remainingMs, touched: true })
   applyMusicPolicy(s.phase)
 }
