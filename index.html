@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>rradio</title>
+    <meta name="description" content="A small, private web radio: J-pop, K-pop, lofi, plus ambient layers and a pomodoro timer." />
+    <meta name="theme-color" content="#f3ead8" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      // Apply the saved theme before first paint to avoid a flash.
+      try {
+        var t = JSON.parse(localStorage.getItem('rradio:settings') || '{}').theme;
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
