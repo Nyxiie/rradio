@@ -1,7 +1,7 @@
 /**
- * Ambient layers. The sounds are synthesised at runtime with the Web Audio API
- * (see src/lib/ambient/synth.ts), so there are no audio files and no licences.
- * To add a layer: add an id here and a builder with the same id in synth.ts.
+ * Ambient layers. Each id has a looping recording at public/ambient/<id>.mp3
+ * (sources and licences are listed in public/ambient/CREDITS.md).
+ * To add a layer: add an id here and drop <id>.mp3 into public/ambient/.
  */
 export const AMBIENT_LAYERS = [
   { id: 'rain', label: 'Rain', glyph: '☂' },
@@ -15,3 +15,5 @@ export const AMBIENT_LAYERS = [
 ] as const
 
 export type AmbientId = (typeof AMBIENT_LAYERS)[number]['id']
+
+export const ambientUrl = (id: AmbientId) => `/ambient/${id}.mp3`

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { AMBIENT_CREDITS, STATION_CREDITS } from '../config/credits'
 import { exportJson, importJson } from '../lib/customStations'
 import { settingsStore, useSettings, type BreakMusic, type ThemePref } from '../lib/settings'
 import { Modal, buttonClass, inputClass } from './ui'
@@ -32,7 +33,55 @@ function Minutes({ label, field }: { label: string; field: 'focus' | 'short' | '
   )
 }
 
+function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">
+      {children}
+    </a>
+  )
+}
+
+function Credits({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className={buttonClass}>
+        ← Back
+      </button>
+
+      <h3 className="border-t-2 border-line pt-4 text-xs font-bold uppercase tracking-widest">Ambient sounds</h3>
+      <p className="text-xs text-muted">
+        Recordings released into the public domain under CC0 1.0. Each was trimmed into a seamless loop, with its
+        loudness matched.
+      </p>
+      <ul className="space-y-3">
+        {AMBIENT_CREDITS.map((c) => (
+          <li key={c.id} className="text-sm">
+            <span className="font-bold">{c.label}</span>
+            <span className="block text-xs">
+              <ExternalLink href={c.url}>{c.title}</ExternalLink> by {c.author}
+              <span className="text-muted"> · {c.licence}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <h3 className="border-t-2 border-line pt-4 text-xs font-bold uppercase tracking-widest">Stations</h3>
+      <p className="text-xs text-muted">
+        Streams and now-playing data belong to their stations and are used under their own terms.
+      </p>
+      <ul className="space-y-1 text-sm">
+        {STATION_CREDITS.map((s) => (
+          <li key={s.url}>
+            <ExternalLink href={s.url}>{s.name}</ExternalLink>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 export default function Settings({ onClose }: { onClose: () => void }) {
+  const [showCredits, setShowCredits] = useState(false)
   const theme = useSettings((s) => s.theme)
   const dataSaver = useSettings((s) => s.dataSaver)
   const chime = useSettings((s) => s.pomodoro.chime)
@@ -67,7 +116,10 @@ export default function Settings({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal title="Settings" onClose={onClose}>
+    <Modal title={showCredits ? 'Credits' : 'Settings'} onClose={onClose}>
+      {showCredits ? (
+        <Credits onBack={() => setShowCredits(false)} />
+      ) : (
       <div className="space-y-4">
         <Row label="Theme">
           <select
@@ -141,7 +193,15 @@ export default function Settings({ onClose }: { onClose: () => void }) {
             {msg}
           </p>
         )}
+
+        <h3 className="border-t-2 border-line pt-4 text-xs font-bold uppercase tracking-widest">About</h3>
+        <div>
+          <button onClick={() => setShowCredits(true)} className={buttonClass}>
+            Credits
+          </button>
+        </div>
       </div>
+      )}
     </Modal>
   )
 }

@@ -73,7 +73,6 @@ export default function AmbientMixer() {
           <Layer key={l.id} {...l} />
         ))}
       </div>
-      <p className="mt-3 text-xs text-muted">Generated live in your browser. Mix as many as you like over the music.</p>
     </Panel>
   )
 }

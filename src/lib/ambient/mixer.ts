@@ -1,17 +1,17 @@
-import { AMBIENT_LAYERS, type AmbientId } from '../../config/ambient'
+import { AMBIENT_LAYERS, ambientUrl, type AmbientId } from '../../config/ambient'
 import { createStore, useStore } from '../store'
 import { settingsStore } from '../settings'
 import { getAudioContext } from './context'
-import { buildLayer, createNoiseBuffers, type Layer, type NoiseBuffers } from './synth'
 
 /**
- * Ambient mixer: layers -> per-layer gain -> master gain -> speakers.
- * Music plays through a plain <audio> element and is mixed by the OS/browser,
- * so third-party streams need no CORS headers.
+ * Ambient mixer: looping recording -> per-layer gain -> master gain -> speakers.
+ * Each recording is fetched and decoded the first time its layer is switched on,
+ * then kept in memory. Music plays through a plain <audio> element and is mixed
+ * by the OS/browser, so third-party streams need no CORS headers.
  */
 
 interface RunningLayer {
-  layer: Layer
+  source: AudioBufferSourceNode
   gain: GainNode
 }
 
@@ -24,50 +24,90 @@ export const ambientOn = createStore<Record<AmbientId, boolean>>(
 export const useAmbientOn = (id: AmbientId) => useStore(ambientOn, (s) => s[id])
 
 let master: GainNode | null = null
-let bufs: NoiseBuffers | null = null
 const running = new Map<AmbientId, RunningLayer>()
+const decoded = new Map<AmbientId, AudioBuffer>()
+const loading = new Map<AmbientId, Promise<AudioBuffer | null>>()
 
 /** Slider position to gain: squared for a perceptually even response. */
 const curve = (v: number) => v * v
 
-function ensureGraph(): { ctx: AudioContext; master: GainNode; bufs: NoiseBuffers } {
-  const ctx = getAudioContext()
+function ensureMaster(ctx: AudioContext): GainNode {
   if (!master) {
     master = ctx.createGain()
     master.gain.value = curve(settingsStore.get().ambientMaster)
     master.connect(ctx.destination)
   }
-  if (!bufs) bufs = createNoiseBuffers(ctx)
-  return { ctx, master, bufs }
+  return master
+}
+
+/** Fetch and decode one recording. Resolves to null on any failure; a failed load can be retried. */
+function loadBuffer(ctx: AudioContext, id: AmbientId): Promise<AudioBuffer | null> {
+  const cached = decoded.get(id)
+  if (cached) return Promise.resolve(cached)
+  let p = loading.get(id)
+  if (!p) {
+    p = (async () => {
+      try {
+        const res = await fetch(ambientUrl(id))
+        if (!res.ok) return null
+        const buf = await ctx.decodeAudioData(await res.arrayBuffer())
+        decoded.set(id, buf)
+        return buf
+      } catch {
+        return null
+      } finally {
+        loading.delete(id)
+      }
+    })()
+    loading.set(id, p)
+  }
+  return p
 }
 
 function startLayer(id: AmbientId): void {
   if (running.has(id)) return
-  const { ctx, master, bufs } = ensureGraph()
-  const layer = buildLayer(ctx, bufs, id)
-  const gain = ctx.createGain()
-  gain.gain.value = 0
-  layer.out.connect(gain).connect(master)
-  gain.gain.setTargetAtTime(curve(settingsStore.get().ambientVolume[id]), ctx.currentTime, 0.15)
-  running.set(id, { layer, gain })
+  const ctx = getAudioContext()
+  const out = ensureMaster(ctx)
+  void loadBuffer(ctx, id).then((buffer) => {
+    // Switched off (or already started) while the file was loading.
+    if (!ambientOn.get()[id] || running.has(id)) return
+    if (!buffer) {
+      ambientOn.patch({ [id]: false } as Partial<Record<AmbientId, boolean>>)
+      return
+    }
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.loop = true
+    const gain = ctx.createGain()
+    gain.gain.value = 0
+    source.connect(gain).connect(out)
+    source.start()
+    gain.gain.setTargetAtTime(curve(settingsStore.get().ambientVolume[id]), ctx.currentTime, 0.4)
+    running.set(id, { source, gain })
+  })
 }
 
 function stopLayer(id: AmbientId): void {
   const r = running.get(id)
-  if (!r || !master) return
+  if (!r) return
   running.delete(id)
-  const ctx = r.gain.context
-  r.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.1)
+  r.gain.gain.setTargetAtTime(0, r.gain.context.currentTime, 0.15)
   setTimeout(() => {
-    r.layer.stop()
+    try {
+      r.source.stop()
+    } catch {
+      // already stopped
+    }
+    r.source.disconnect()
     r.gain.disconnect()
-  }, 500)
+  }, 800)
 }
 
 export function setAmbientOn(id: AmbientId, on: boolean): void {
+  // Patch first: a failed load flips the layer back to off asynchronously.
+  ambientOn.patch({ [id]: on } as Partial<Record<AmbientId, boolean>>)
   if (on) startLayer(id)
   else stopLayer(id)
-  ambientOn.patch({ [id]: on } as Partial<Record<AmbientId, boolean>>)
 }
 
 export function toggleAmbient(id: AmbientId): void {

@@ -1,6 +1,6 @@
 # rradio
 
-> A small, private web radio with live stations, synthesised ambient layers, a pomodoro timer and your own stations. It runs entirely in the browser.
+> A small, private web radio with live stations, looping ambient recordings, a pomodoro timer and your own stations. It runs entirely in the browser.
 
 <p>
   <img src="https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=20232A" alt="React">
@@ -18,7 +18,7 @@
 | Build tooling | Vite 8 |
 | Styling | Tailwind CSS 4 |
 | Station audio | HTML `<audio>` element |
-| Ambient sound | Web Audio API (synthesised, no audio files) |
+| Ambient sound | Web Audio API playing looping CC0 recordings from `public/ambient/` |
 | Now-playing data | WebSocket (LISTEN.moe) and JSON polling (AzuraCast) |
 | Persistence | `localStorage` in the visitor's browser |
 | Installable app | Web app manifest and a small service worker |
@@ -34,7 +34,7 @@ There is no backend and no account system. Favourites, settings and custom stati
 - **Stations**: LISTEN.moe J-pop and K-pop, six Lofi Cafe lofi stations (Chilling, Studying, Working, Sleeping, Gaming, Japanese Lofi), FluxFM Chillhop and Code Radio, grouped by genre with search and favourites.
 - **Now playing**: live title and artist for LISTEN.moe over its WebSocket, and for Lofi Cafe and Code Radio by polling their AzuraCast API. FluxFM shows the station name only.
 - **Player**: play/pause, previous/next station, volume and mute, Media Session integration for media keys, and automatic reconnect with backoff. LISTEN.moe falls back to its MP3 mount where Ogg Vorbis is not supported.
-- **Ambient layers**: rain, vinyl, fire, ocean, tape, woods, river and storm, generated live with the Web Audio API. Each layer has its own volume, plus an overall volume and a master play/pause.
+- **Ambient layers**: rain, vinyl, fire, ocean, tape, woods, river and storm, looping recordings played through the Web Audio API and fetched the first time a layer is switched on. Each layer has its own volume, plus an overall volume and a master play/pause.
 - **Pomodoro**: 25 minute focus, 5 minute break and 15 minute long break by default, with a chime, the countdown in the tab title, and a choice to keep, lower or pause the music during breaks.
 - **Sleep timer**: 15, 30, 45, 60 or 90 minutes, with a fade-out.
 - **Your own stations**: add a direct stream URL, or an `.m3u`, `.m3u8` or `.pls` playlist that is parsed in the browser. Edit, delete and favourite them, and export or import them as JSON.
@@ -47,7 +47,7 @@ There is no backend and no account system. Favourites, settings and custom stati
 flowchart LR
     User["Listener"] --> UI["React single-page app"]
     UI --> Player["Player engine<br/>(HTML audio)"]
-    UI --> Ambient["Ambient mixer<br/>(Web Audio synth)"]
+    UI --> Ambient["Ambient mixer<br/>(Web Audio loops)"]
     UI --> Timers["Pomodoro and<br/>sleep timer"]
     UI --> Storage[("localStorage")]
     Player -->|audio stream| Streams["Station streams"]
@@ -56,7 +56,7 @@ flowchart LR
     Meta -->|JSON polling| Azura["AzuraCast APIs"]
 ```
 
-Music plays through a plain `<audio>` element, so third-party streams do not need CORS headers. The ambient mixer is separate: synthesised layers pass through per-layer and master gain nodes. Station definitions live in one file, `src/config/stations.ts`, and user-added stations are merged with them at runtime.
+Music plays through a plain `<audio>` element, so third-party streams do not need CORS headers. The ambient mixer is separate: each layer is a decoded looping recording that passes through per-layer and master gain nodes. Station definitions live in one file, `src/config/stations.ts`, and user-added stations are merged with them at runtime.
 
 ## Getting Started
 
@@ -105,12 +105,12 @@ src/
   components/          Station list, player bar, mixer, timers, settings, add-station form
   lib/
     player/            Audio engine, player state, Media Session
-    ambient/           Web Audio context, mixer, layer synthesis
+    ambient/           Web Audio context, mixer (loads and loops the recordings)
     metadata/          LISTEN.moe WebSocket client and AzuraCast polling
     playlist.ts        .m3u / .m3u8 / .pls parser
     customStations.ts  User station storage, import and export
     pomodoro.ts, sleepTimer.ts, settings.ts, storage.ts, store.ts
-public/                Manifest, icons, service worker
+public/                Manifest, icons, service worker, ambient/ (loops and CREDITS.md)
 scripts/gen-icons.mjs  Icon generator
 ```
 
@@ -141,3 +141,5 @@ The audio streams belong to their stations and have their own terms of use. Chec
 ## Credits
 
 Station streams and now-playing data come from [LISTEN.moe](https://listen.moe), [Lofi Cafe](https://loficafe.net), [FluxFM](https://www.fluxfm.de) and [freeCodeCamp Code Radio](https://coderadio.freecodecamp.org).
+
+Ambient loops are cut from CC0 (public domain) recordings by Joseph Sardin and Pierre Sibanarco on [BigSoundBank](https://bigsoundbank.com), and from "Tape Noise Groove" by Antoni Robert on the [Internet Archive](https://archive.org/details/hr092). Per-file details are in [`public/ambient/CREDITS.md`](public/ambient/CREDITS.md).

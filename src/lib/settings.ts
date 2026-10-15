@@ -35,7 +35,7 @@ const defaults: Settings = {
   stationId: null,
   favourites: [],
   ambientMaster: 0.8,
-  ambientVolume: Object.fromEntries(AMBIENT_LAYERS.map((l) => [l.id, 0.5])) as Record<AmbientId, number>,
+  ambientVolume: Object.fromEntries(AMBIENT_LAYERS.map((l) => [l.id, 0.6])) as Record<AmbientId, number>,
   pomodoro: { focus: 25, short: 5, long: 15, rounds: 4, breakMusic: 'lower', chime: true },
 }
 
