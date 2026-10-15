@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import AddStation from './components/AddStation'
 import AmbientMixer from './components/AmbientMixer'
-import { GearIcon, MoonIcon, SunIcon } from './components/icons'
+import { CoffeeIcon, GearIcon, MoonIcon, SunIcon } from './components/icons'
 import PlayerBar from './components/PlayerBar'
 import Pomodoro, { usePomodoroRemaining } from './components/Pomodoro'
 import Settings from './components/Settings'
@@ -82,6 +82,16 @@ export default function App() {
           >
             Data saver
           </button>
+          <a
+            href="https://ko-fi.com/rradio"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Support rradio on Ko-fi"
+            title="Support rradio on Ko-fi"
+            className="retro retro-press bg-surface p-1.5"
+          >
+            <CoffeeIcon />
+          </a>
           <button
             onClick={() => settingsStore.patch({ theme: dark ? 'light' : 'dark' })}
             aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}

@@ -70,3 +70,9 @@ export const PlusIcon = () => (
     <path d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z" />
   </Svg>
 )
+
+export const CoffeeIcon = () => (
+  <Svg>
+    <path d="M7 2.5h1.5v3H7zM10.5 2.5H12v3h-1.5zM4 7.5h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 9h1.5a3 3 0 0 1 0 6H16v-1.6h1.5a1.4 1.4 0 0 0 0-2.8H16zM3 20h14v1.5H3z" />
+  </Svg>
+)
